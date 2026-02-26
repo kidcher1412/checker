@@ -1,0 +1,23 @@
+# Phase 4 Implementation Plan
+
+## 1. Version Timeline Manager
+- **Issue**: Time ranges are strict, and overlapping throws an error. User wants auto-cropping and infinite bounds support.
+- **Fix**: 
+  - Update [templates.service.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/templates/templates.service.ts) to perform "Time Cropping" instead of throwing `BadRequestException`. If Version A is saved from Jan 1 to Jan 10, and Version B is active Jan 5 to Jan 15, Version B gets cropped to Jan 11 to Jan 15.
+  - Update [VersionTimelineManager.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/components/VersionTimelineManager.tsx) UI to calculate offsets better for far future/past dates, and format inputs to append `00:00`/`23:59` logic if only a day is specified.
+
+## 2. Template Builder Save Action
+- **Issue**: Save always creates a new version if there isn't an ID passed natively, or it's hardcoded to save over. User wants explicit control.
+- **Fix**: 
+  - In [TemplateBuilder.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/TemplateBuilder.tsx), store the `currentVersionId` state.
+  - Provide two buttons: `[Update v{X}]` (PUT) and `[Save as New Version]` (POST).
+
+## 3. View Secret Key Action
+- **Issue**: User wants to "View" the existing secret key.
+- **Security Check**: We hashed the secret (`bcrypt`). We **cannot** decrypt it to show the user. 
+- **Fix**: I will inform the user in the UI/API that the secret is one-way hashed for security. Alternatively, if strict requirement, we must change the DB to store it encrypted but reversible (AES-256) instead of hashed. Given typical industry security standards for API Keys, I will implement **AES-256 encryption** for the `rawSecret` instead of `bcrypt` so admins can decrypt and view it.
+
+## 4. Header UI and Login 
+- **Login Form**: Fix [Login.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Login.tsx) by adding `e.preventDefault()` to the form submission so it doesn't reload the page on error. Catch the Axios error and display a Toast.
+- **Auth Guard**: In `auth.service.ts`, check `user.isActive`. If false, throw `UnauthorizedException("Tài khoản đã bị khoá")`.
+- **Header Profile**: Read the decoded JWT from `localStorage` in the layout component and format the string: `Xin chào {email} ({role})`.

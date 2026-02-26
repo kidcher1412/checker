@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  min-width: 1em;
+  border: 1px solid #e5e7eb;
+  padding: 3px 5px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ProseMirror th {
+  font-weight: bold;
+  text-align: left;
+  background-color: #f9fafb;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: #adf;
+  pointer-events: none;
+}
+
+/* Custom Border Controls based on data attributes */
+.ProseMirror td[data-border-top="none"],
+.ProseMirror th[data-border-top="none"] {
+  border-top-color: transparent !important;
+}
+
+.ProseMirror td[data-border-bottom="none"],
+.ProseMirror th[data-border-bottom="none"] {
+  border-bottom-color: transparent !important;
+}
+
+.ProseMirror td[data-border-left="none"],
+.ProseMirror th[data-border-left="none"] {
+  border-left-color: transparent !important;
+}
+
+.ProseMirror td[data-border-right="none"],
+.ProseMirror th[data-border-right="none"] {
+  border-right-color: transparent !important;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}

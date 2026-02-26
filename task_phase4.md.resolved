@@ -1,0 +1,25 @@
+# Document System Phase 4 Task Checklist
+
+## 1. Timeline & Template Versioning Logic
+- [x] Timeline Default Times & Spanning:
+  - [x] Adjust Timeline to start from a further point in the past/future and allow year-based or infinite ranges (null vs exact date logic).
+  - [x] Default start time applied to 00:00, end time to 23:59.
+- [x] Timeline Auto-Adjustment (Collision Handling):
+  - [x] If a user edits a timeline block and it overlaps another, crop the existing blocks rather than rejecting the save.
+- [x] TemplateBuilder Save Flow:
+  - [x] Add explicit "Save over current version (vX)" vs "Save as New Version" buttons.
+
+## 2. API & Security Fixes
+- [x] Suspended User Login:
+  - [x] Update [auth.service.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/auth/auth.service.ts) to reject login if `user.isActive` is false.
+- [x] Application Client Secret Viewing:
+  - [x] Implemented Symmetrical Encryption (AES) to store application secrets.
+  - [x] Built the `/reveal` endpoint.
+  - [x] Built Frontend Modal to display the raw secret string.
+
+## 3. UI Fixes
+- [x] Global User Header:
+  - [x] Extract user data from JWT/Auth context and render "Xin chào [Email] ([Role])" in the Header.
+- [x] Login Error Handling:
+  - [x] Prevent page reload on form submit.
+  - [x] Display toast error or inline text for incorrect credentials.

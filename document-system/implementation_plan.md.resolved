@@ -1,0 +1,93 @@
+# Kiến Trúc Hệ Thống Quản Lý Mẫu Biểu và Sinh PDF Động
+
+Ứng dụng sẽ được phát triển dựa trên **NestJS (Node.js/TypeScript)**, một framework giúp tổ chức code mạnh mẽ theo mô hình **Modular Monolith** kết hợp nguyên lý của **Clean Architecture**.
+
+## 1. Công nghệ sử dụng (Technology Stack)
+
+- **Backend Framework:** NestJS (Node.js + TypeScript)
+- **Database Abstraction & ORM:** TypeORM (Hỗ trợ tốt đa nền tảng PostgreSQL, MySQL, Master/Slave, cho phép switch database driver dễ dàng) hoặc Prisma. *Sẽ sử dụng TypeORM để linh hoạt hơn trong việc triển khai DB đa hệ quản trị (Repository Pattern thực thụ).*
+- **PDF Generation Engine:** Puppeteer hoặc Playwright (Dùng Chromium headless sinh PDF chuẩn format).
+- **Template Rendering:** Handlebars (Hỗ trợ lặp, if/else, biến động siêu tốc độ) kết hợp bộ xử lý JSON Schema.
+- **Caching & Rate Limit:** Redis (Phù hợp để cache Template, Rate limit API App Client).
+- **Security:** Passport/JWT (Authentication), bcrypt/argon2 (Hashing), HMAC-SHA256 (API Signature).
+
+---
+
+## 2. Thiết kế Kiến Trúc (Clean Architecture / Modular Monolith)
+
+Hệ thống được chia làm các Layer rõ ràng (trong từng Module):
+
+### Presentation Layer (Controllers / API)
+- Xử lý Request/Response HTTP.
+- Route Guard (Auth, RBAC, HMAC Signature).
+- Rate Limiting.
+- Input validation (DTOs sử dụng `class-validator`).
+
+### Application Layer (Use Cases / Services)
+- Chứa business logic tổng thể.
+- Xử lý phối hợp các Domain entities.
+- Transaction management (UOW).
+- Ví dụ: `GenerateDocumentService`, `AuthService`.
+
+### Domain Layer (Entities / Business Logic)
+- Thể hiện các thực thể cốt lõi: `User`, `Role`, `Template`, `Application`.
+- Chứa business rules thuần túy không phụ thuộc framework (như tính toán mã hash, đổi SecretKey).
+
+### Infrastructure Layer
+- **DB Abstraction (Repositories):** Các class implements Interface dùng chuẩn CRUD, gọi tới TypeORM thuần.
+- **External Services:** PDF Generator (Puppeteer), Redis Cache, Logger.
+
+---
+
+## 3. Lớp Giao Tiếp Database (DB Abstraction)
+
+Hỗ trợ mọi loại DB thông qua TypeORM. Lớp dao (Repository Pattern) được chuẩn hóa thông qua Interface `IBaseRepository<T>`.
+
+- **Cấu trúc:** BaseRepository implements IBaseRepository giải quyết CRUD, Paging, Soft Delete.
+- **Audit Log:** Sử dụng TypeORM Subscribers/Interceptors tự động ghi log vào bảng `audit_logs` trước/sau khi DB thao tác đổi dữ liệu.
+- **Paging:** Abstract utility chung nhận đối số `limit`, `offset`.
+
+---
+
+## 4. Bảo Mật & Xác Thực (Security & Auth)
+
+### 4.1 Người Dùng Nội Bộ (Internal Users - CMS)
+- Đăng nhập JWT (`access_token` sống ngắn hạn 15m, `refresh_token` sống 7d).
+- Middleware RBAC (kiểm tra `@RequirePermissions('template:write')`).
+- Redis Token Blacklist khi logout.
+
+### 4.2 Application Clients (External API)
+- Sử dụng mô hình Header Authentication: `X-App-Code` & `X-App-Secret` (Hash + Salt).
+- Có thể tuỳ chọn cấu hình xác thực HMAC: `X-Signature`, `X-Timestamp` (Chống Replay Attack).
+- Rate Limiting giới hạn tần suất gọi sinh PDF (vd: 100 req/min).
+
+---
+
+## 5. Thiết kế Core: Template & PDF Generation
+
+**Lưu trữ Template:**
+- `SchemaVariables`: Lưu format JSON Schema để validate payload người dùng gửi vào (VD: required properties).
+- `TemplateLayout`: Lưu cấu trúc HTML/CSS + Handlebars variables.
+
+**Luồng sinh PDF (`POST /api/generate-document`):**
+1. Nhận Request -> Middleware HMAC/SecretGuard check App.
+2. RateLimit -> Check số request.
+3. Validate Payload Input khớp với JSON Schema của Template.
+4. Lấy Template (Từ DB hoặc chớp nhoáng qua Cache Redis).
+5. Compile HTML (Handlebars) + Data JSON -> Final HTML.
+6. Đưa HTML vào headless browser Engine -> Buffer PDF.
+7. Trả file PDF về qua luồng Stream (`application/pdf`).
+
+---
+
+## 6. Mở Rộng Hệ Thống (Scalability)
+- **Message Queue:** Các API Sinh PDF nặng có thể đẩy vào RabbitMQ hoặc BullMQ (Redis) để Worker xử lý, API trả về `job_id` cho client polling thay vì đợi đồng bộ.
+- **Stateless:** Toàn bộ API đều stateless dựa trên Session Token, SecretKey, sẵn sàng cho docker swarm / k8s horizontal pod auto-scaling.
+
+---
+
+> [!IMPORTANT]  
+> Cần User phản hồi: 
+> 1. Bạn muốn thiết lập thư mục project ứng dụng ở đâu? (`C:\Users\kidcher1412\.gemini\antigravity\scratch\document-system`?)
+> 2. Có muốn chọn ưu tiên TypeORM (PostgreSQL/MySQL) hay Prisma cho lớp ORM?
+> 3. Trong Giai đoạn Prototype, tôi sẽ setup bộ Render đồng bộ (Wait for PDF). Bạn có muốn triển khai hàng đợi (Message Queue) ngay từ đầu không?

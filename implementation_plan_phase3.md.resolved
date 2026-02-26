@@ -1,0 +1,28 @@
+# Document System Phase 3 Implementation Plan
+
+## Proposed Changes
+
+### 1. Dashboard API Fix
+- **File**: [src/dashboard/dashboard.service.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/dashboard/dashboard.service.ts)
+- **Change**: Modify `totalTemplates` to count uniquely by `templateCode` instead of just [count()](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/users/repositories/users.repository.ts#24-27).
+
+### 2. Users CRUD
+- **API**: Add endpoints (`POST /api/users`, `PUT /api/users/:id`, `DELETE /api/users/:id`) in [UsersController](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/users/users.controller.ts#5-15) and [UsersService](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/users/users.service.ts#8-66).
+- **UI**: Update [Users.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Users.tsx) to include an "Add User" modal and "Edit" / "Suspend" actions that hit the API.
+
+### 3. Application Clients CRUD
+- **API**: Add endpoints (`PUT /api/clients/:id`, `DELETE /api/clients/:id`, `POST /api/clients/:id/rotate`) in [ClientsController](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/clients/clients.controller.ts#7-30).
+- **UI**: Update [AppClients.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/AppClients.tsx) to include "Create App" modal, "Edit" modal, and "Delete" / "Rotate Secret" actions.
+
+### 4. Version Timeline Manager Redesign
+- **UI Component**: Restructure [VersionTimelineManager.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/components/VersionTimelineManager.tsx).
+  - Display a single horizontal timeline track.
+  - Show blocks of color mapped to their time.
+  - Below/beside the timeline, show a list of all versions (including historical).
+  - Add buttons: `[Remove from timeline]` (nullifies dates), `[Delete]` (deletes from DB, disabled if in timeline), `[Edit]` (opens editor).
+- **API Logic**: Add `DELETE /api/templates/:id` to support the deletion of unused versions.
+
+## Verification
+- Verify Dashboard template count accurately reflects unique templates.
+- Verify User and AppClient CRUD operations reflect in the database.
+- Verify Timeline redesign acts as a unified track and allows deleting/linking versions.

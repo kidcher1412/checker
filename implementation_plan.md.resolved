@@ -1,0 +1,91 @@
+# Document System Enhancements Implementation Plan
+
+This plan covers integrating Swagger, adding time-based template versioning, and enhancing the UI template editor according to your requests.
+
+## User Review Required
+> [!IMPORTANT]
+> - **Visual Timeline**: I will build a custom interactive Timeline component using pure React state, HTML, and Tailwind CSS. It will show a graphical bar chart mapping out the time periods of different template versions to fulfill the request for "hiển thị cây thời gian có thể kéo thả...". Dragging the blocks will update the `validFrom`/`validTo` data.
+> - **AppClient Template Association**: Currently, the DB schema associates Templates to Owners (Users), but not explicitly to specific AppClients. I will assume we need to join this, or simply list all active templates and let the AppClient "subscribe" to them via a new junction table or just list all templates available if there's no strict scoping wanted yet. I will create a `client_templates` junction table or equivalent if strict scoping is needed, or just list templates in the detail modal.
+> Please review and approve this approach for Phase 2!
+
+## Proposed Changes
+
+### API (document-system)
+#### [NEW] [package.json](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/package.json) dependencies
+- Install `@nestjs/swagger` and `swagger-ui-express`.
+
+#### [MODIFY] [src/main.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/main.ts)
+- Setup Swagger UI at `/api/docs`.
+
+#### [MODIFY] [src/templates/entities/template.entity.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/templates/entities/template.entity.ts)
+- Add `isTimeBased` (boolean, default false).
+- Add `validFrom` (timestamp/Date, nullable).
+- Add `validTo` (timestamp/Date, nullable).
+
+#### [MODIFY] [src/templates/templates.service.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/templates/templates.service.ts)
+- Add validation in `createVersion` and [update](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/users/users.service.ts#53-56) methods to check for overlapping `validFrom`/`validTo` ranges when `isTimeBased` is true.
+- Add logic in [findByCode](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/templates/repositories/templates.repository.ts#45-48) to optionally accept a target Date or version number to resolve the correct version.
+
+#### [MODIFY] [src/generator/generator.controller.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/generator/generator.controller.ts) & [src/templates/templates.controller.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/templates/templates.controller.ts)
+- Extract optional `x-template-version` header.
+- Pass header value or current date to the service to resolve the correct template version for rendering.
+
+---
+
+### UI (document-system-ui)
+#### [NEW] [package.json](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/package.json) dependencies
+- Install `@tiptap/extension-text-align`, `@tiptap/extension-color`, `@tiptap/extension-text-style`, and `handlebars` (for local preview).
+
+#### [MODIFY] [src/pages/TemplateBuilder.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/TemplateBuilder.tsx)
+- **Edit/Preview Toggle**: Add state to switch between Edit Mode and Preview Mode.
+- **Preview Mode**: Show a split pane. Left side: JSON input textarea. Right side: Handlebars rendered HTML.
+- **Rich Text Toolbar**: 
+  - Add Alignment buttons (Left, Center, Right).
+  - Add Color picker.
+  - Add Table border toggle buttons (Top, Bottom, Left, Right) that apply specific data attributes to selected cells.
+- **Version Settings UI**: Add fields for `isTimeBased` checkbox, `validFrom`, and `validTo`.
+
+#### [MODIFY] [src/index.css](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/index.css)
+- Add CSS rules to hide borders when specific data attributes are present (e.g., `td[data-border-top="none"] { border-top: none !important; }`).
+
+#### [MODIFY] [src/services/api.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/services/api.ts)
+- Connect UI actions (save, list, etc.) to the respective existing API endpoints.
+
+### Phase 2: API Enhancements (document-system)
+
+#### [NEW] `src/dashboard/dashboard.controller.ts` & Module
+- Add a new controller to aggregate total counts (users, templates, applications) and mock generation history for the charts.
+
+#### [MODIFY] `src/users/users.controller.ts`
+- Create standard `GET /api/users` endpoint returning all users securely minus passwords.
+
+#### [MODIFY] [src/clients/clients.controller.ts](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system/src/clients/clients.controller.ts)
+- Add `GET /api/clients` to list applications.
+- Add `GET /api/clients/:id` to retrieve an application details.
+- Add logic to show associated templates for a client.
+
+---
+
+### Phase 2: UI Enhancements (document-system-ui)
+
+#### [NEW] `src/components/VersionTimelineManager.tsx`
+- Build a custom component for managing time-based template versions.
+- Feature: Color-coded blocks spanning a horizontal date axis.
+- Feature: Drag-and-drop handles for `validFrom` and `validTo` bounds.
+- Connect this to the gear icon in the "Version Settings" sidebar.
+
+#### [MODIFY] [src/pages/Dashboard.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Dashboard.tsx)
+- Replace static dummy data with an API call to `/api/dashboard/stats`.
+
+#### [MODIFY] [src/pages/Users.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Users.tsx)
+- Fetch real users from `/api/users`.
+
+#### [MODIFY] [src/pages/AppClients.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/AppClients.tsx)
+- Fetch real clients from `/api/clients`.
+- Add an expandable row or Modal to show connection authentication details and a list of templates the application can use (with edit hooks).
+
+## Verification Plan
+1. Check that clicking the gear icon in the template editor reveals the interactive version timeline.
+2. Ensure dragging blocks in the timeline updates the corresponding dates.
+3. Access Dashboard, Users, and AppClients pages to verify real data loads successfully.
+4. Open the details view of an AppClient to inspect connection details and template bindings.

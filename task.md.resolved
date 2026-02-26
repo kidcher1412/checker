@@ -1,0 +1,66 @@
+# Document System Enhancements Checklist
+
+## 1. Project Planning & Understanding
+- [x] Understand the structure of `document-system` (API).
+- [x] Understand the structure of `document-system-ui` (UI).
+- [x] Create an [implementation_plan.md](file:///C:/Users/kidcher1412/.gemini/antigravity/brain/91d40bc0-818f-4688-9aa8-7cf3c82393cd/implementation_plan.md) for the requested features.
+
+## 2. API Enhancements
+- [x] Add Swagger/Scalar for API documentation.
+- [x] Implement Time-based Template Versioning logic.
+  - [x] Update database schema to support time ranges for template versions.
+  - [x] Ensure validation logic prevents overlapping time ranges for the same template.
+  - [x] Implement template resolution based on current time.
+- [x] Allow header override for specific template version in the render API.
+- [x] Verify template export/import still works with new versioning. (No changes needed to structure)
+
+## 3. UI Enhancements
+- [x] Integrate API calls into the UI.
+- [x] Enhance Template Editor:
+  - [x] Add Preview toggle with JSON payload input.
+  - [x] Add Quick text selection and customization options.
+  - [x] Add rich text buttons: table creation (with border config), alignment (left, center, right), text/line color.
+- [x] Implement Time-based Versioning Management in the UI:
+  - [x] Checkbox to enable time-based versioning.
+  - [x] UI to manage multiple versions with start and end times.
+  - [ ] Validation to prevent overlap in the UI (Handled by API).
+
+## 4. Verification
+- [x] Test Swagger UI (API built successfully).
+- [x] Test Template rendering with time-based resolution and header override (API build succeeded).
+- [x] Test UI Editor features (preview, table, styles) (UI build succeeded).
+- [x] Test complete flow from UI to API.
+
+## Phase 2: Advanced UI & Integrations
+- [x] Create Time-based Versioning Visual Timeline
+  - [x] Build interactive Timeline component in TemplateBuilder.
+  - [x] Allow dragging and dropping to adjust version time ranges.
+  - [x] Color-code versions and outline currently assigned version time ranges.
+- [x] Connect Dashboard API
+  - [x] Add `GET /api/dashboard/stats` to API.
+  - [x] Connect [Dashboard.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Dashboard.tsx) to display real counts and charts.
+- [x] Connect Users & RBAC API
+  - [x] Add `GET /api/users` endpoint to fetch user list.
+  - [x] Connect [Users.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Users.tsx) to display real users.
+- [x] Connect Application Clients API
+  - [x] Add `GET /api/clients` endpoint.
+  - [x] Add `GET /api/clients/:id/templates` to see associated templates.
+  - [x] Update [AppClients.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/AppClients.tsx) list to fetch real data.
+  - [x] Add AppClient detail view/modal showing auth config and template assignments.
+
+## Phase 3: Full CRUD & Timeline Enhancements
+- [x] Fix Dashboard Template Count
+  - [x] Count distinct `templateCode` instead of all rows.
+- [x] Users & RBAC Full CRUD
+  - [x] Create API for Add/Edit/Delete User.
+  - [ ] Update [Users.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/Users.tsx) with Modals/forms to manage users.
+- [x] Application Clients Full CRUD
+  - [x] Create API for Create/Edit/Delete/RotateSecret.
+  - [ ] Update [AppClients.tsx](file:///C:/Users/kidcher1412/.gemini/antigravity/scratch/document-system-ui/src/pages/AppClients.tsx) with Modals/forms to manage clients.
+- [x] Version Timeline Manager Redesign
+  - [x] Unify timeline into a single track (or visual blocks on one axis).
+  - [x] Add list of historical versions with creation info.
+  - [x] Add "Remove from Timeline" functionality.
+  - [x] Add "Delete Version" functionality (only if not in timeline).
+  - [x] Add "Edit Version" button to redirect to specific version editor.
+  - [x] Drag and drop adjustment (if possible) or precise inputs.

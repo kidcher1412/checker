@@ -1,0 +1,37 @@
+# Hệ Thống Quản Lý Mẫu Biểu và Sinh PDF Động (Template & Document Management System)
+
+## Checklist Tiến Độ
+
+- [x] **Giai đoạn 1: Lên kế hoạch và Thiết kế Kiến trúc (Planning & Architecture)**
+  - [x] Thiết kế kiến trúc tổng thể (Clean Architecture / Modular Monolith)
+  - [x] Thiết kế Database Schema
+  - [x] Lên phương án bảo mật & mở rộng
+- [x] **Giai đoạn 2: Khởi tạo Project (Project Setup)**
+  - [x] Khởi tạo dự án bằng NestJS (TypeScript)
+  - [x] Cấu hình ESLint, Prettier, Husky
+  - [x] Cấu hình biến môi trường (Environment Variables)
+- [x] **Giai đoạn 3: Lớp Giao Tiếp Cơ Sở Dữ Liệu (DB Abstraction Layer)**
+  - [x] Thiết lập ORM (TypeORM hoặc Prisma) với khả năng đổi DB dễ dàng
+  - [x] Xây dựng Base Repository (hỗ trợ CRUD, Soft Delete, Pagination, Transaction)
+  - [x] Tích hợp Audit Log cơ bản
+- [/] **Giai đoạn 4: Quản Lý User và Phân Quyền (Auth & RBAC)**
+  - [ ] Xây dựng Models: Users, Roles, Permissions
+  - [ ] Triển khai JWT Authentication (Access Token & Refresh Token)
+  - [ ] Xây dựng Guards/Middleware kiểm tra quyền thao tác
+- [ ] **Giai đoạn 5: Quản Lý Application Client (App Clients API)**
+  - [ ] Xây dựng Models Application, tự động sinh AppCode, SecretKey (được mã hóa)
+  - [ ] Viết middleware xác thực qua Header (`X-App-Code`, `X-App-Secret`) hoặc HMAC
+  - [ ] Xây dựng cơ chế Rotate SecretKey và Rate Limiting
+- [ ] **Giai đoạn 6: Quản Lý Mẫu Biểu (Template Management)**
+  - [ ] Thiết kế Model Template (JSON Schema, JSON Layout, Versioning)
+  - [ ] Chức năng CRUD Mẫu (Tạo, Sửa, Lấy danh sách, Import/Export JSON)
+  - [ ] Chức năng Preview (Render thử nội dung HTML từ JSON Data + Layout)
+- [ ] **Giai đoạn 7: API Sinh File (Document Generation Engine)**
+  - [ ] Xây dựng luồng Validate JSON Input dựa trên Schema
+  - [ ] Render nội dung HTML từ engine (như Handlebars/Pug)
+  - [ ] Chuyển đổi HTML sang PDF sử dụng Puppeteer hoặc engine tương đương
+  - [ ] Cấu hình caching cho template để tăng tốc
+- [ ] **Giai đoạn 8: Hoàn thiện, Bảo mật & System Verification (Verification)**
+  - [ ] Kiểm tra toàn bộ luồng Auth, RBAC, và sinh file
+  - [ ] Kiểm tra luồng cấp phát Client App và xác thực API
+  - [ ] Đảm bảo cơ chế bảo mật (Anti-replay, Logging, Token Blacklist)
