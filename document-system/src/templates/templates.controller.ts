@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, UseGuards, Put, Delete, Res } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, UseGuards, Put, Delete, Res, Headers } from '@nestjs/common';
 import { TemplatesService } from './templates.service';
 import { GeneratorService } from '../generator/generator.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -58,15 +58,16 @@ export class TemplatesController {
     @RequirePermissions('template:read')
     async previewPdf(
         @Body() body: { templateCode: string; data: any; version?: number; layout?: string; watermarks?: any[] },
+        @Headers() headers: any,
         @Res() res: Response
     ) {
         try {
             let pdfBuffer;
             if (body.layout) {
                 // Generate WYSIWYG PDF directly from React UI input (ignoring DB version)
-                pdfBuffer = await this.generatorService.generatePreviewPdf(body.layout, body.watermarks || [], body.data || {});
+                pdfBuffer = await this.generatorService.generatePreviewPdf(body.layout, body.watermarks || [], body.data || {}, headers);
             } else {
-                pdfBuffer = await this.generatorService.generatePdf(body.templateCode, body.data || {}, body.version);
+                pdfBuffer = await this.generatorService.generatePdf(body.templateCode, body.data || {}, body.version, headers);
             }
             res.set({
                 'Content-Type': 'application/pdf',
@@ -86,12 +87,13 @@ export class TemplatesController {
     @RequirePermissions('template:read')
     async previewRawHtml(
         @Body() body: { templateCode: string; data: any; version?: number; layout?: string; watermarks?: any[] },
+        @Headers() headers: any,
         @Res() res: Response
     ) {
         try {
             let htmlString;
             if (body.layout) {
-                htmlString = await this.generatorService.generatePreviewHtml(body.layout, body.watermarks || [], body.data || {});
+                htmlString = await this.generatorService.generatePreviewHtml(body.layout, body.watermarks || [], body.data || {}, headers);
             } else {
                 return res.status(400).json({ message: "Layout UI string required for direct HTML preview" });
             }

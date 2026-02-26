@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
+import Gapcursor from '@tiptap/extension-gapcursor';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -30,6 +32,7 @@ interface WatermarkConfig {
     customY?: number;
     layer: 'background' | 'foreground';
     pages: string; // e.g. "1-3, 5" or empty for all
+    conditionVariable?: string;
 }
 
 const MOCK_VARIABLES = [
@@ -47,6 +50,14 @@ const CustomTableCell = TableCell.extend({
             'data-border-bottom': { default: null },
             'data-border-left': { default: null },
             'data-border-right': { default: null },
+            backgroundColor: {
+                default: null,
+                parseHTML: element => element.style.backgroundColor || null,
+                renderHTML: attributes => {
+                    if (!attributes.backgroundColor) return {};
+                    return { style: `background-color: ${attributes.backgroundColor}` };
+                },
+            },
         };
     },
 });
@@ -59,6 +70,14 @@ const CustomTableHeader = TableHeader.extend({
             'data-border-bottom': { default: null },
             'data-border-left': { default: null },
             'data-border-right': { default: null },
+            backgroundColor: {
+                default: null,
+                parseHTML: element => element.style.backgroundColor || null,
+                renderHTML: attributes => {
+                    if (!attributes.backgroundColor) return {};
+                    return { style: `background-color: ${attributes.backgroundColor}` };
+                },
+            },
         };
     },
 });
@@ -112,6 +131,13 @@ const TemplateBuilder: React.FC = () => {
     // Preview Mode State
     const [isPreviewMode, setIsPreviewMode] = useState(false);
     const [previewJson, setPreviewJson] = useState('{\n  "customerName": "John Doe",\n  "orderId": "ORD-12345",\n  "totalAmount": "$150.00",\n  "currentDate": "2026-02-25"\n}');
+
+    const [isTableMenuOpen, setIsTableMenuOpen] = useState(false);
+    useEffect(() => {
+        const handleClick = () => setIsTableMenuOpen(false);
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
+    }, []);
 
     // Time-based versioning state
     const [isTimeBased, setIsTimeBased] = useState(false);
@@ -179,6 +205,7 @@ const TemplateBuilder: React.FC = () => {
     const editor = useEditor({
         extensions: [
             StarterKit,
+            Gapcursor,
             Table.configure({ resizable: true }),
             TableRow,
             CustomTableHeader,
@@ -495,14 +522,20 @@ const TemplateBuilder: React.FC = () => {
                                             <div key={wm.id} className="absolute inset-0 z-0 pointer-events-none overflow-hidden" style={{ opacity: wm.opacity }}>
                                                 <div className="w-[200%] h-[200%] -ml-[50%] -mt-[50%] flex flex-wrap transform -rotate-45 content-start items-start opacity-70">
                                                     {Array.from({ length: 150 }).map((_, i) => (
-                                                        <div key={i} className="p-8 font-bold" style={{ color: wm.color, fontSize: wm.fontSize + 'px' }}>{wm.text}</div>
+                                                        <div key={i} className="p-8 font-bold" style={{ color: wm.color, fontSize: wm.fontSize + 'px' }}>
+                                                            {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: wm.fontSize * 5 }} alt="" /> : wm.text}
+                                                        </div>
                                                     ))}
                                                 </div>
                                             </div>
                                         );
                                     }
 
-                                    return <div key={wm.id} style={baseStyle}>{wm.text}</div>;
+                                    return (
+                                        <div key={wm.id} style={baseStyle}>
+                                            {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: wm.fontSize * 5 }} alt="" /> : wm.text}
+                                        </div>
+                                    );
                                 })}
                             </div>
                         </div>
@@ -510,7 +543,7 @@ const TemplateBuilder: React.FC = () => {
                 ) : (
                     // EDITOR VIEW
                     <div className="flex-1 bg-gray-50 overflow-y-auto p-8 relative flex flex-col items-center">
-                        <div className="mb-4 flex gap-1 justify-center z-10 bg-white shadow-md p-1.5 rounded-full border border-gray-100 flex-wrap">
+                        <div className="sticky top-4 mb-4 flex gap-1 justify-center z-50 bg-white/40 backdrop-blur-sm hover:bg-white transition-colors duration-300 shadow-md p-1.5 rounded-full border border-gray-100 flex-wrap">
                             {/* Text Styles */}
                             <button onClick={() => editor?.chain().focus().toggleBold().run()} className={`p-2 hover:bg-gray-100 rounded ${editor?.isActive('bold') ? 'bg-gray-100 text-blue-600' : ''}`}><strong>B</strong></button>
                             <button onClick={() => editor?.chain().focus().toggleItalic().run()} className={`p-2 hover:bg-gray-100 rounded ${editor?.isActive('italic') ? 'bg-gray-100 text-blue-600' : ''}`}><em>I</em></button>
@@ -573,7 +606,50 @@ const TemplateBuilder: React.FC = () => {
                         </div>
 
                         {/* The Editor */}
-                        <EditorContent editor={editor} />
+                        <div onContextMenu={(e) => {
+                            if (editor?.isActive('table')) {
+                                e.preventDefault();
+                                setIsTableMenuOpen(true);
+                            }
+                        }} className="w-full">
+                            <style>{`
+                                .ProseMirror .selectedCell {
+                                    background-color: rgba(65, 137, 230, 0.2) !important;
+                                }
+                            `}</style>
+                            <EditorContent editor={editor} />
+                        </div>
+
+                        {editor && (
+                            <BubbleMenu editor={editor} shouldShow={({ editor }: any) => editor.isActive('table') && isTableMenuOpen}>
+                                <div className="bg-gray-800 text-white shadow-lg rounded-md border border-gray-700 p-1 flex items-center gap-1 text-xs">
+                                    <button onClick={() => editor.chain().focus().addRowBefore().run()} className="p-1 px-2 hover:bg-gray-700 rounded transition font-medium" title="Add Row Before">↑ Row</button>
+                                    <button onClick={() => editor.chain().focus().addRowAfter().run()} className="p-1 px-2 hover:bg-gray-700 rounded transition font-medium" title="Add Row After">↓ Row</button>
+                                    <button onClick={() => editor.chain().focus().deleteRow().run()} className="p-1 px-2 hover:bg-red-600 rounded transition text-red-300 font-medium" title="Delete Row">Del Row</button>
+                                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                                    <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="p-1 px-2 hover:bg-gray-700 rounded transition font-medium" title="Add Column Before">← Col</button>
+                                    <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="p-1 px-2 hover:bg-gray-700 rounded transition font-medium" title="Add Column After">→ Col</button>
+                                    <button onClick={() => editor.chain().focus().deleteColumn().run()} className="p-1 px-2 hover:bg-red-600 rounded transition text-red-300 font-medium" title="Delete Column">Del Col</button>
+                                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                                    <button onClick={() => editor.chain().focus().mergeCells().run()} className="p-1 px-2 hover:bg-gray-700 rounded transition font-medium" title="Merge Cells">Merge</button>
+                                    <button onClick={() => editor.chain().focus().splitCell().run()} className="p-1 px-2 hover:bg-gray-700 rounded transition font-medium" title="Split Cell">Split</button>
+                                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                                    <button onClick={() => editor.chain().focus().deleteTable().run()} className="p-1 px-2 hover:bg-red-600 rounded transition text-red-400 font-bold" title="Delete Table">Del Table</button>
+                                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                                    <div className="flex items-center px-2 hover:bg-gray-700 rounded relative group" title="Cell Background Color">
+                                        <PaintBucket size={14} className="text-gray-300 mr-1" />
+                                        <input
+                                            type="color"
+                                            onInput={(event) => {
+                                                const color = (event.target as HTMLInputElement).value;
+                                                editor.chain().focus().updateAttributes('tableCell', { backgroundColor: color }).updateAttributes('tableHeader', { backgroundColor: color }).run();
+                                            }}
+                                            className="w-4 h-4 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                        />
+                                    </div>
+                                </div>
+                            </BubbleMenu>
+                        )}
                     </div>
                 )}
 
@@ -820,6 +896,10 @@ const TemplateBuilder: React.FC = () => {
                                             </div>
                                         )}
                                         <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Condition Variable <span className="text-gray-400 font-normal text-xs">(optional, e.g. "mark" for data.mark)</span></label>
+                                            <input type="text" placeholder="Leave empty to always show" value={editingWatermark.conditionVariable || ''} onChange={e => setEditingWatermark({ ...editingWatermark, conditionVariable: e.target.value })} className="w-full border-gray-300 rounded focus:border-blue-500 focus:ring-blue-500 placeholder-gray-300 mb-4" />
+                                        </div>
+                                        <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Page Range <span className="text-gray-400 font-normal text-xs">(optional, e.g. "1-3, 5")</span></label>
                                             <input type="text" placeholder="Leave empty for all pages" value={editingWatermark.pages} onChange={e => setEditingWatermark({ ...editingWatermark, pages: e.target.value })} className="w-full border-gray-300 rounded focus:border-blue-500 focus:ring-blue-500 placeholder-gray-300" />
                                         </div>
@@ -863,28 +943,28 @@ const TemplateBuilder: React.FC = () => {
                                             if (wm.position === 'center') {
                                                 baseStyle.top = '50%';
                                                 baseStyle.left = '50%';
-                                                baseStyle.transform = `translate(-50%, -50%) rotate(${wm.rotation || -45}deg)`;
+                                                baseStyle.transform = `translate(-50%, -50%) rotate(${wm.rotation ?? -45}deg)`;
                                             } else if (wm.position === 'top-left') {
                                                 baseStyle.top = '10px';
                                                 baseStyle.left = '10px';
-                                                baseStyle.transform = `rotate(${wm.rotation || 0}deg)`;
+                                                baseStyle.transform = `rotate(${wm.rotation ?? 0}deg)`;
                                             } else if (wm.position === 'bottom-right') {
                                                 baseStyle.bottom = '10px';
                                                 baseStyle.right = '10px';
-                                                baseStyle.transform = `rotate(${wm.rotation || 0}deg)`;
+                                                baseStyle.transform = `rotate(${wm.rotation ?? 0}deg)`;
                                             } else if (wm.position === 'custom') {
                                                 baseStyle.top = `${wm.customY || 50}%`;
                                                 baseStyle.left = `${wm.customX || 50}%`;
-                                                baseStyle.transform = `translate(-50%, -50%) rotate(${wm.rotation || 0}deg)`;
+                                                baseStyle.transform = `translate(-50%, -50%) rotate(${wm.rotation ?? 0}deg)`;
                                             }
 
                                             if (wm.position === 'tiled') {
                                                 return (
                                                     <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" style={{ opacity: wm.opacity }}>
-                                                        <div className="w-[200%] h-[200%] -ml-[50%] -mt-[50%] flex flex-wrap transform content-start items-start opacity-70" style={{ transform: `rotate(${wm.rotation || -45}deg)` }}>
+                                                        <div className="w-[200%] h-[200%] -ml-[50%] -mt-[50%] flex flex-wrap transform content-start items-start opacity-70" style={{ transform: `rotate(${wm.rotation ?? -45}deg)` }}>
                                                             {Array.from({ length: 50 }).map((_, i) => (
                                                                 <div key={i} className="p-2 font-bold" style={{ color: wm.color, fontSize: (wm.fontSize * scaleFactor) + 'px' }}>
-                                                                    {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: (wm.fontSize * 5 * scaleFactor) + 'px' }} /> : wm.text}
+                                                                    {wm.type === 'image' ? (wm.imageUrl ? <img src={wm.imageUrl} style={{ width: (wm.fontSize * 5 * scaleFactor) + 'px' }} /> : null) : wm.text}
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -894,7 +974,7 @@ const TemplateBuilder: React.FC = () => {
 
                                             return (
                                                 <div style={baseStyle}>
-                                                    {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: (wm.fontSize * 5 * scaleFactor) + 'px' }} /> : wm.text}
+                                                    {wm.type === 'image' ? (wm.imageUrl ? <img src={wm.imageUrl} style={{ width: (wm.fontSize * 5 * scaleFactor) + 'px' }} /> : null) : wm.text}
                                                 </div>
                                             );
                                         })()}

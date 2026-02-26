@@ -11,6 +11,7 @@ export class GeneratorController {
     @UseGuards(AppSecretGuard)
     async generateDocument(
         @Body() body: { template_code: string; data: any },
+        @Headers() headers: any,
         @Headers('x-template-version') versionHeader: string,
         @Res() res: Response
     ) {
@@ -20,7 +21,7 @@ export class GeneratorController {
 
         try {
             const version = versionHeader ? parseInt(versionHeader, 10) : undefined;
-            const pdfBuffer = await this.generatorService.generatePdf(body.template_code, body.data || {}, version);
+            const pdfBuffer = await this.generatorService.generatePdf(body.template_code, body.data || {}, version, headers);
 
             res.set({
                 'Content-Type': 'application/pdf',

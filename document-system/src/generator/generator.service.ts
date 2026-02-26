@@ -9,7 +9,7 @@ export class GeneratorService {
 
     constructor(private readonly templatesService: TemplatesService) { }
 
-    async generatePdf(templateCode: string, data: any, version?: number): Promise<Buffer> {
+    async generatePdf(templateCode: string, data: any, version?: number, headers?: any): Promise<Buffer> {
         const template = await this.templatesService.getActiveTemplate(templateCode, undefined, version);
         if (!template) {
             throw new NotFoundException(`Template with code ${templateCode} not found`);
@@ -33,59 +33,71 @@ export class GeneratorService {
             }
         } catch (e) { }
 
-        return this.buildAndConvertHtml(bodyContent, parsedWatermarks);
+        return this.buildAndConvertHtml(bodyContent, parsedWatermarks, data || {}, headers || {});
     }
 
-    async generatePreviewPdf(layoutUrlOrHtml: string, watermarks: any[], data: any): Promise<Buffer> {
+    async generatePreviewPdf(layoutUrlOrHtml: string, watermarks: any[], data: any, headers?: any): Promise<Buffer> {
         // Validate Data? In preview, we might just pass empty data or let errors slide.
         const bodyContent = this.templatesService.previewTemplate(layoutUrlOrHtml, data);
-        const htmlString = this.buildHtmlString(bodyContent, watermarks);
+        const htmlString = this.buildHtmlString(bodyContent, watermarks, data || {}, headers || {});
         return this.convertHtmlToPdf(htmlString);
     }
 
-    async generatePreviewHtml(layoutUrlOrHtml: string, watermarks: any[], data: any): Promise<string> {
+    async generatePreviewHtml(layoutUrlOrHtml: string, watermarks: any[], data: any, headers?: any): Promise<string> {
         const bodyContent = this.templatesService.previewTemplate(layoutUrlOrHtml, data);
-        return this.buildHtmlString(bodyContent, watermarks);
+        return this.buildHtmlString(bodyContent, watermarks, data || {}, headers || {});
     }
 
-    private buildAndConvertHtml(bodyContent: string, watermarksArray: any[]): Promise<Buffer> {
-        const fullHtml = this.buildHtmlString(bodyContent, watermarksArray);
+    private buildAndConvertHtml(bodyContent: string, watermarksArray: any[], data: any, headers: any): Promise<Buffer> {
+        const fullHtml = this.buildHtmlString(bodyContent, watermarksArray, data, headers);
         return this.convertHtmlToPdf(fullHtml);
     }
 
-    private buildHtmlString(bodyContent: string, watermarksArray: any[]): string {
+    private buildHtmlString(bodyContent: string, watermarksArray: any[], data: any, headers: any): string {
         // 3. Construct Full Document with Print CSS and Watermarks
         let watermarksHtml = '';
         if (watermarksArray && Array.isArray(watermarksArray)) {
-            watermarksHtml = watermarksArray.map(wm => {
+            const activeWatermarks = watermarksArray.filter(wm => {
+                if (!wm.conditionVariable || wm.conditionVariable.trim() === '') return true;
+                try {
+                    const fn = new Function('b', 'h', 'return ' + wm.conditionVariable.trim());
+                    return !!fn(data || {}, headers || {});
+                } catch (e) {
+                    // Fallback to strict property access if it isn't a valid JS expression
+                    const val = data?.[wm.conditionVariable.trim()];
+                    return val === true || val === 'true' || val === '1' || val === 1;
+                }
+            });
+
+            watermarksHtml = activeWatermarks.map(wm => {
                 let styles = `position: fixed; pointer-events: none; opacity: ${wm.opacity}; white-space: nowrap; z-index: ${wm.layer === 'foreground' ? 100 : -1}; `;
 
-                let transform = `rotate(${wm.rotation || 0}deg)`;
+                let transform = `rotate(${wm.rotation ?? 0}deg)`;
                 if (wm.position === 'center') {
-                    styles += `top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(${wm.rotation !== undefined ? wm.rotation : -45}deg); `;
+                    styles += `top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(${wm.rotation ?? -45}deg); `;
                 } else if (wm.position === 'top-left') {
                     styles += `top: 40px; left: 40px; transform: ${transform}; `;
                 } else if (wm.position === 'bottom-right') {
                     styles += `bottom: 40px; right: 40px; transform: ${transform}; `;
                 } else if (wm.position === 'custom') {
-                    styles += `top: ${wm.customY !== undefined ? wm.customY : 50}%; left: ${wm.customX !== undefined ? wm.customX : 50}%; transform: translate(-50%, -50%) ${transform}; `;
+                    styles += `top: ${wm.customY ?? 50}%; left: ${wm.customX ?? 50}%; transform: translate(-50%, -50%) ${transform}; `;
                 }
 
                 if (wm.position === 'tiled') {
                     return `
                     <div style="position: fixed; inset: 0; z-index: ${wm.layer === 'foreground' ? 100 : -1}; opacity: ${wm.opacity}; pointer-events: none; overflow: hidden;">
-                        <div style="width: 200%; height: 200%; margin-left: -50%; margin-top: -50%; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; transform: rotate(${wm.rotation !== undefined ? wm.rotation : -45}deg); opacity: 0.7;">
-                            ${Array.from({ length: 150 }).map(() => `<div style="padding: 2rem; font-weight: bold; font-size: ${wm.fontSize}px; color: ${wm.color};">${wm.type === 'image' && wm.imageUrl ? `<img src="${wm.imageUrl}" style="width: ${wm.fontSize * 5}px;" />` : wm.text}</div>`).join('')}
+                        <div style="width: 200%; height: 200%; margin-left: -50%; margin-top: -50%; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; transform: rotate(${wm.rotation ?? -45}deg); opacity: 0.7;">
+                            ${Array.from({ length: 150 }).map(() => `<div style="padding: 2rem; font-weight: bold; font-size: ${wm.fontSize}px; color: ${wm.color};">${wm.type === 'image' ? (wm.imageUrl ? `<img src="${wm.imageUrl}" style="width: ${wm.fontSize * 5}px;" />` : '') : wm.text}</div>`).join('')}
                         </div>
                     </div>`;
                 }
 
-                const content = wm.type === 'image' && wm.imageUrl
-                    ? `<img src="${wm.imageUrl}" style="width: ${wm.fontSize * 5}px;" />`
+                const content = wm.type === 'image'
+                    ? (wm.imageUrl ? `<img src="${wm.imageUrl}" style="width: ${wm.fontSize * 5}px;" />` : '')
                     : `<div style="color: ${wm.color}; font-size: ${wm.fontSize}px; font-weight: bold;">${wm.text}</div>`;
 
                 return `<div style="${styles}">${content}</div>`;
-            }).join('\\n');
+            }).join('\n');
         }
 
         // Exploit: Tiptap StarterKit strips all unallowed attributes (including class and styles) when grabbing HTML

@@ -4,6 +4,7 @@ import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './winston.config';
 import helmet from 'helmet';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -13,6 +14,10 @@ async function bootstrap() {
   // Security
   app.use(helmet());
   app.enableCors();
+
+  // Increase payload limit to handle large layout generation (e.g. GrapesJS)
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Swagger setup
   const config = new DocumentBuilder()
