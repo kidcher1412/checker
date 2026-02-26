@@ -81,6 +81,7 @@ export class TemplatesService {
         if (data.validTo !== undefined) template.validTo = data.validTo ? new Date(data.validTo) : null;
         if (data.status !== undefined) template.status = data.status;
         if (data.watermarks !== undefined) template.watermarks = data.watermarks;
+        if (data.pageConfig !== undefined) template.pageConfig = data.pageConfig;
 
         if (template.isTimeBased) {
             await this.checkTimeOverlap(template.templateCode, template.validFrom, template.validTo, template.id);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Gapcursor from '@tiptap/extension-gapcursor';
@@ -10,8 +10,9 @@ import { TableHeader } from '@tiptap/extension-table-header';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { Extension } from '@tiptap/core';
-import { Save, FileJson, ArrowLeft, Type, LayoutTemplate, PlusCircle, AlignLeft, AlignCenter, AlignRight, Eye, Edit3, Settings, PaintBucket, Settings2, X, Trash2, Terminal } from 'lucide-react';
+import Image from '@tiptap/extension-image';
+import { Save, FileJson, ArrowLeft, Type, LayoutTemplate, PlusCircle, AlignLeft, AlignCenter, AlignRight, Eye, Edit3, Settings, PaintBucket, Settings2, X, Trash2, Terminal, Image as ImageIcon, Columns as ColumnsIcon, MinusCircle, Hand } from 'lucide-react';
+import { Extension, mergeAttributes, Node } from '@tiptap/core';
 import { useNavigate, useParams } from 'react-router-dom';
 import * as Handlebars from 'handlebars';
 import { toast } from 'react-toastify';
@@ -101,8 +102,8 @@ const FontSize = Extension.create({
                 attributes: {
                     fontSize: {
                         default: null,
-                        parseHTML: element => element.style.fontSize?.replace(/['"]+/g, ''),
-                        renderHTML: attributes => {
+                        parseHTML: (element: any) => element.style.fontSize?.replace(/['"]+/g, ''),
+                        renderHTML: (attributes: any) => {
                             if (!attributes.fontSize) return {};
                             return { style: `font-size: ${attributes.fontSize}` };
                         },
@@ -113,10 +114,202 @@ const FontSize = Extension.create({
     },
     addCommands() {
         return {
-            setFontSize: (fontSize) => ({ chain }) => chain().setMark('textStyle', { fontSize }).run(),
-            unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+            setFontSize: (fontSize: string) => ({ chain }: any) => chain().setMark('textStyle', { fontSize }).run(),
+            unsetFontSize: () => ({ chain }: any) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
         };
     },
+});
+
+const ResizableImageNode = (props: any) => {
+    const { node, updateAttributes, selected } = props;
+    const { src, alt, title, width, wrapType, x, y } = node.attrs;
+    const [isDragging, setIsDragging] = useState(false);
+
+    let styleObj: React.CSSProperties = { display: 'inline-block', margin: '0' };
+    if (wrapType === 'square-left') styleObj = { float: 'left', margin: '0 15px 15px 0' };
+    else if (wrapType === 'square-right') styleObj = { float: 'right', margin: '0 0 15px 15px' };
+    else if (wrapType === 'top-bottom') styleObj = { display: 'block', clear: 'both', margin: '15px auto' };
+    else if (wrapType === 'behind') styleObj = { position: 'absolute', zIndex: -1, margin: 0, left: `${x}px`, top: `${y}px` };
+    else if (wrapType === 'front') styleObj = { position: 'absolute', zIndex: 10, margin: 0, left: `${x}px`, top: `${y}px` };
+
+    let wrapperClass = '';
+    if (wrapType === 'behind' || wrapType === 'front') wrapperClass += 'is-absolute-image ';
+    if (isDragging) wrapperClass += 'dragging-active ';
+
+    return (
+        <NodeViewWrapper as="span" style={styleObj} className={wrapperClass.trim()}>
+            <span className={`relative inline-block ${selected ? 'ring-2 ring-blue-500' : ''}`} style={{ width: width || '200px' }}>
+                <img
+                    src={src}
+                    alt={alt}
+                    title={title}
+                    style={{ width: '100%', display: 'block' }}
+                    data-drag-handle={wrapType !== 'behind' && wrapType !== 'front' ? "true" : undefined}
+                />
+
+                {selected && (wrapType === 'behind' || wrapType === 'front') && (
+                    <div
+                        className="absolute -top-3 -left-3 w-6 h-6 bg-white border border-gray-300 rounded-full shadow flex items-center justify-center z-20 cursor-move"
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsDragging(true);
+                            document.body.classList.add('is-dragging-overlay');
+
+                            const startX = e.pageX;
+                            const startY = e.pageY;
+                            const startNodeX = parseInt(x || 0, 10);
+                            const startNodeY = parseInt(y || 0, 10);
+
+                            // Adjust for editor zoom
+                            const zoomMatches = document.querySelector('.ProseMirror')?.parentElement?.style.transform.match(/scale\(([^)]+)\)/);
+                            const zoom = zoomMatches ? parseFloat(zoomMatches[1]) : 1;
+
+                            const onMouseMove = (moveEvent: MouseEvent) => {
+                                const dx = (moveEvent.pageX - startX) / zoom;
+                                const dy = (moveEvent.pageY - startY) / zoom;
+                                updateAttributes({ x: startNodeX + dx, y: startNodeY + dy });
+                            };
+                            const onMouseUp = () => {
+                                document.removeEventListener('mousemove', onMouseMove);
+                                document.removeEventListener('mouseup', onMouseUp);
+                                setIsDragging(false);
+                                document.body.classList.remove('is-dragging-overlay');
+                            };
+                            document.addEventListener('mousemove', onMouseMove);
+                            document.addEventListener('mouseup', onMouseUp);
+                        }}
+                    >
+                        <Hand size={12} className="text-gray-500" />
+                    </div>
+                )}
+
+                {selected && (
+                    <div
+                        className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-blue-600 border border-white cursor-nwse-resize z-20"
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsDragging(true);
+                            document.body.classList.add('is-dragging-overlay');
+
+                            const startX = e.pageX;
+                            const startWidth = parseInt(width || '200', 10);
+
+                            const zoomMatches = document.querySelector('.ProseMirror')?.parentElement?.style.transform.match(/scale\(([^)]+)\)/);
+                            const zoom = zoomMatches ? parseFloat(zoomMatches[1]) : 1;
+
+                            const onMouseMove = (moveEvent: MouseEvent) => {
+                                const newWidth = Math.max(50, startWidth + (moveEvent.pageX - startX) / zoom);
+                                updateAttributes({ width: newWidth + 'px' });
+                            };
+                            const onMouseUp = () => {
+                                document.removeEventListener('mousemove', onMouseMove);
+                                document.removeEventListener('mouseup', onMouseUp);
+                                setIsDragging(false);
+                                document.body.classList.remove('is-dragging-overlay');
+                            };
+                            document.addEventListener('mousemove', onMouseMove);
+                            document.addEventListener('mouseup', onMouseUp);
+                        }}
+                    />
+                )}
+            </span>
+        </NodeViewWrapper>
+    );
+};
+
+const CustomImage = Image.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            width: {
+                default: '200px',
+                parseHTML: element => element.style.width || element.getAttribute('width') || '200px',
+            },
+            wrapType: {
+                default: 'inline',
+                parseHTML: (element: any) => element.getAttribute('data-wrap') || 'inline',
+                renderHTML: (attributes: any) => {
+                    return { 'data-wrap': attributes.wrapType };
+                }
+            },
+            x: {
+                default: 0,
+                parseHTML: (element: any) => parseInt(element.getAttribute('data-x') || '0', 10),
+                renderHTML: (attributes: any) => ({ 'data-x': attributes.x })
+            },
+            y: {
+                default: 0,
+                parseHTML: (element: any) => parseInt(element.getAttribute('data-y') || '0', 10),
+                renderHTML: (attributes: any) => ({ 'data-y': attributes.y })
+            }
+        };
+    },
+    renderHTML({ HTMLAttributes }: any) {
+        let style = `width: ${HTMLAttributes.width || '200px'}; `;
+        const wrap = HTMLAttributes['data-wrap'];
+        const x = HTMLAttributes['data-x'] || 0;
+        const y = HTMLAttributes['data-y'] || 0;
+
+        if (wrap === 'square-left') style += 'float: left; margin: 0 15px 15px 0; ';
+        else if (wrap === 'square-right') style += 'float: right; margin: 0 0 15px 15px; ';
+        else if (wrap === 'top-bottom') style += 'display: block; clear: both; margin: 15px auto; ';
+        else if (wrap === 'behind') style += `position: absolute; z-index: -1; margin: 0; left: ${x}px; top: ${y}px; `;
+        else if (wrap === 'front') style += `position: absolute; z-index: 10; margin: 0; left: ${x}px; top: ${y}px; `;
+        else style += 'display: inline-block; margin: 0; ';
+
+        return ['img', { ...HTMLAttributes, style }];
+    },
+    addNodeView() {
+        return ReactNodeViewRenderer(ResizableImageNode);
+    }
+});
+
+declare module '@tiptap/core' {
+    interface Commands<ReturnType> {
+        multiColumn: {
+            setColumns: (cols: number) => ReturnType;
+            unsetColumns: () => ReturnType;
+        }
+    }
+}
+
+const MultiColumn = Node.create({
+    name: 'multiColumn',
+    group: 'block',
+    content: 'block+',
+
+    addAttributes() {
+        return {
+            cols: {
+                default: 2,
+                parseHTML: (element: any) => element.getAttribute('data-cols') || 2,
+                renderHTML: (attributes: any) => {
+                    return {
+                        'data-cols': attributes.cols,
+                        style: `column-count: ${attributes.cols}; column-gap: 32px;`,
+                    }
+                }
+            }
+        }
+    },
+    parseHTML() {
+        return [{ tag: 'div[data-cols]' }]
+    },
+    renderHTML({ HTMLAttributes }: any) {
+        return ['div', mergeAttributes(HTMLAttributes, { class: 'multi-column' }), 0]
+    },
+    addCommands() {
+        return {
+            setColumns: (cols: number) => ({ commands }: any) => {
+                return commands.wrapIn('multiColumn', { cols })
+            },
+            unsetColumns: () => ({ commands }: any) => {
+                return commands.lift('multiColumn')
+            }
+        }
+    }
 });
 
 const TemplateBuilder: React.FC = () => {
@@ -139,6 +332,32 @@ const TemplateBuilder: React.FC = () => {
         return () => document.removeEventListener('click', handleClick);
     }, []);
 
+    // Alt-Key Reveal Images behind text
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Alt') {
+                e.preventDefault();
+                document.body.classList.add('reveal-behind-images');
+            }
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === 'Alt') {
+                document.body.classList.remove('reveal-behind-images');
+            }
+        };
+        const handleBlur = () => document.body.classList.remove('reveal-behind-images');
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        window.addEventListener('blur', handleBlur);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+            window.removeEventListener('blur', handleBlur);
+        };
+    }, []);
+
     // Time-based versioning state
     const [isTimeBased, setIsTimeBased] = useState(false);
     const [validFrom, setValidFrom] = useState('');
@@ -150,6 +369,16 @@ const TemplateBuilder: React.FC = () => {
     const [watermarks, setWatermarks] = useState<WatermarkConfig[]>([]);
     const [isWatermarkModalOpen, setIsWatermarkModalOpen] = useState(false);
     const [editingWatermark, setEditingWatermark] = useState<WatermarkConfig | null>(null);
+
+    const [pageConfig, setPageConfig] = useState({
+        margins: { top: 1, bottom: 1, left: 1, right: 1 },
+        orientation: 'portrait',
+        showPageNumbers: false,
+        hideFirstPageNumber: false
+    });
+    const [isPageConfigMenuOpen, setIsPageConfigMenuOpen] = useState(false);
+    const [previewZoom, setPreviewZoom] = useState(40);
+    const [editorZoom, setEditorZoom] = useState(40);
 
     const [isCurlModalOpen, setIsCurlModalOpen] = useState(false);
 
@@ -214,6 +443,8 @@ const TemplateBuilder: React.FC = () => {
             TextStyle,
             Color,
             FontSize,
+            CustomImage.configure({ allowBase64: true }),
+            MultiColumn,
         ],
         content: `
             <h1>Hello {{customerName}}</h1>
@@ -222,8 +453,7 @@ const TemplateBuilder: React.FC = () => {
         `,
         editorProps: {
             attributes: {
-                class: 'prose max-w-none focus:outline-none min-h-[800px] border border-gray-200 bg-white shadow-sm p-12 mx-auto',
-                style: pageSize === 'A4' ? 'width: 210mm;' : pageSize === 'A5' ? 'width: 148mm;' : 'width: 8.5in;'
+                class: 'prose max-w-none focus:outline-none bg-white shadow-sm border border-gray-200 transition-all duration-300 mx-auto',
             }
         },
         onSelectionUpdate: ({ editor }) => {
@@ -251,6 +481,9 @@ const TemplateBuilder: React.FC = () => {
                     if (template.watermarks) setWatermarks(typeof template.watermarks === 'string' ? JSON.parse(template.watermarks) : template.watermarks);
                     else setWatermarks([]);
                 } catch (e) { setWatermarks([]); }
+                try {
+                    if (template.pageConfig) setPageConfig(typeof template.pageConfig === 'string' ? JSON.parse(template.pageConfig) : template.pageConfig);
+                } catch (e) { }
                 editor.commands.setContent(template.templateLayout);
                 toast.info(`Loaded version v${versionNumber}`);
             }
@@ -399,20 +632,21 @@ const TemplateBuilder: React.FC = () => {
     };
 
     const renderPreviewHTML = () => {
-        if (!editor) return '';
+        if (!editor) return [];
         try {
-            const data = JSON.parse(previewJson);
+            const data = previewJson ? JSON.parse(previewJson) : {};
             const template = Handlebars.compile(editor.getHTML());
-            return template(data);
+            const fullHtml = template(data);
+            return fullHtml.split(/<hr[^>]*>/gi);
         } catch (e: any) {
-            return `<div style="color: red; padding: 20px;"><strong>Error Rendering Preview:</strong><br/>${e.message}</div>`;
+            return [`<div style="color: red; padding: 20px;"><strong>Error Rendering Preview:</strong><br/>${e.message}</div>`];
         }
     };
 
     return (
         <div className="h-full flex flex-col -m-6">
             {/* Header Toolbar */}
-            <div className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0">
+            <div className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0 z-[100] relative">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate('/templates')} className="text-gray-500 hover:bg-gray-100 p-2 rounded-md transition-colors">
                         <ArrowLeft size={20} />
@@ -449,6 +683,90 @@ const TemplateBuilder: React.FC = () => {
                         <option value="A5">A5 (148x210mm)</option>
                         <option value="LETTER">US Letter</option>
                     </select>
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsPageConfigMenuOpen(!isPageConfigMenuOpen)}
+                            className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded transition font-medium border ${isPageConfigMenuOpen ? 'bg-gray-100 border-gray-400 text-gray-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                        >
+                            <LayoutTemplate size={16} /> Page Setup
+                        </button>
+
+                        {isPageConfigMenuOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-[320px] bg-white rounded-lg shadow-xl border border-gray-200 z-[100] overflow-hidden">
+                                <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                    <h4 className="font-semibold text-gray-700 text-sm">Advanced Page Layout</h4>
+                                    <button onClick={() => setIsPageConfigMenuOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                                </div>
+                                <div className="p-4 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-2">Orientation</label>
+                                        <div className="flex bg-gray-100 p-1 rounded-md">
+                                            <button
+                                                onClick={() => setPageConfig({ ...pageConfig, orientation: 'portrait' })}
+                                                className={`flex-1 text-sm py-1.5 rounded transition font-medium ${pageConfig.orientation === 'portrait' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:bg-gray-200'}`}
+                                            >Portrait</button>
+                                            <button
+                                                onClick={() => setPageConfig({ ...pageConfig, orientation: 'landscape' })}
+                                                className={`flex-1 text-sm py-1.5 rounded transition font-medium ${pageConfig.orientation === 'landscape' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:bg-gray-200'}`}
+                                            >Landscape</button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-2">Document Margins (in)</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded px-2">
+                                                <span className="text-xs text-gray-500 w-12">Top:</span>
+                                                <input type="number" step="0.1" value={pageConfig.margins?.top || 0} onChange={e => setPageConfig({ ...pageConfig, margins: { ...pageConfig.margins, top: parseFloat(e.target.value) || 0 } })} className="w-full text-sm bg-transparent border-none focus:ring-0 p-1 text-right" />
+                                            </div>
+                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded px-2">
+                                                <span className="text-xs text-gray-500 w-12">Bot:</span>
+                                                <input type="number" step="0.1" value={pageConfig.margins?.bottom || 0} onChange={e => setPageConfig({ ...pageConfig, margins: { ...pageConfig.margins, bottom: parseFloat(e.target.value) || 0 } })} className="w-full text-sm bg-transparent border-none focus:ring-0 p-1 text-right" />
+                                            </div>
+                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded px-2">
+                                                <span className="text-xs text-gray-500 w-12">Left:</span>
+                                                <input type="number" step="0.1" value={pageConfig.margins?.left || 0} onChange={e => setPageConfig({ ...pageConfig, margins: { ...pageConfig.margins, left: parseFloat(e.target.value) || 0 } })} className="w-full text-sm bg-transparent border-none focus:ring-0 p-1 text-right" />
+                                            </div>
+                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded px-2">
+                                                <span className="text-xs text-gray-500 w-12">Right:</span>
+                                                <input type="number" step="0.1" value={pageConfig.margins?.right || 0} onChange={e => setPageConfig({ ...pageConfig, margins: { ...pageConfig.margins, right: parseFloat(e.target.value) || 0 } })} className="w-full text-sm bg-transparent border-none focus:ring-0 p-1 text-right" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-2">View Zoom: <span className="text-blue-600 font-normal">{isPreviewMode ? previewZoom : editorZoom}%</span></label>
+                                        <div className="flex items-center gap-2">
+                                            <MinusCircle size={16} className="text-gray-400 cursor-pointer hover:text-blue-600" onClick={() => (isPreviewMode ? setPreviewZoom(Math.max(20, previewZoom - 10)) : setEditorZoom(Math.max(20, editorZoom - 10)))} />
+                                            <input
+                                                type="range"
+                                                min="20"
+                                                max="200"
+                                                step="10"
+                                                value={isPreviewMode ? previewZoom : editorZoom}
+                                                onChange={(e) => (isPreviewMode ? setPreviewZoom(Number(e.target.value)) : setEditorZoom(Number(e.target.value)))}
+                                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                            />
+                                            <PlusCircle size={16} className="text-gray-400 cursor-pointer hover:text-blue-600" onClick={() => (isPreviewMode ? setPreviewZoom(Math.min(200, previewZoom + 10)) : setEditorZoom(Math.min(200, editorZoom + 10)))} />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 border-t border-gray-100 pt-4">
+                                        <label className="block text-xs font-semibold text-gray-600 uppercase mb-2">Pagination Setup</label>
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <input type="checkbox" checked={pageConfig.showPageNumbers} onChange={e => setPageConfig({ ...pageConfig, showPageNumbers: e.target.checked })} className="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer" />
+                                            <span className="text-sm text-gray-700 group-hover:text-blue-600 transition">Show Page Numbers</span>
+                                        </label>
+                                        <label className={`flex items-center gap-2 transition ${!pageConfig.showPageNumbers ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
+                                            <input type="checkbox" disabled={!pageConfig.showPageNumbers} checked={pageConfig.hideFirstPageNumber} onChange={e => setPageConfig({ ...pageConfig, hideFirstPageNumber: e.target.checked })} className="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer" />
+                                            <span className="text-sm text-gray-700 group-hover:text-blue-600 transition tracking-tight">Hide on First Page (Cover)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     <div className="flex bg-gray-100 p-1 border border-gray-200 rounded-md shadow-sm gap-1">
                         <button onClick={() => setIsCurlModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition font-medium bg-gray-800 text-white hover:bg-gray-700">
                             <Terminal size={16} /> Tạo cURL lấy báo cáo
@@ -481,63 +799,88 @@ const TemplateBuilder: React.FC = () => {
                                 spellCheck="false"
                             />
                         </div>
-                        <div className="flex-1 overflow-y-auto p-8 relative flex justify-center">
-                            <div
-                                className="bg-white shadow-sm border border-gray-200 p-12 custom-preview-container prose max-w-none relative overflow-hidden"
-                                style={{ width: pageSize === 'A4' ? '210mm' : pageSize === 'A5' ? '148mm' : '8.5in', minHeight: '800px' }}
-                            >
-                                <div dangerouslySetInnerHTML={{ __html: renderPreviewHTML() }} className="relative z-10" />
-
-                                {/* Watermarks Overlay Rendering */}
-                                {watermarks.map(wm => {
-                                    const baseStyle: React.CSSProperties = {
-                                        position: 'absolute',
-                                        color: wm.color,
-                                        opacity: wm.opacity,
-                                        fontSize: wm.fontSize + 'px',
-                                        fontWeight: 'bold',
-                                        pointerEvents: 'none',
-                                        zIndex: 0,
-                                        whiteSpace: 'nowrap',
-                                    };
-
-                                    if (wm.position === 'center') {
-                                        baseStyle.top = '50%';
-                                        baseStyle.left = '50%';
-                                        baseStyle.transform = 'translate(-50%, -50%) rotate(-45deg)';
-                                    } else if (wm.position === 'top-left') {
-                                        baseStyle.top = '40px';
-                                        baseStyle.left = '40px';
-                                    } else if (wm.position === 'bottom-right') {
-                                        baseStyle.bottom = '40px';
-                                        baseStyle.right = '40px';
-                                    } else if (wm.position === 'custom') {
-                                        baseStyle.top = `${wm.customY || 50}%`;
-                                        baseStyle.left = `${wm.customX || 50}%`;
-                                        baseStyle.transform = 'translate(-50%, -50%)';
-                                    }
-
-                                    if (wm.position === 'tiled') {
-                                        return (
-                                            <div key={wm.id} className="absolute inset-0 z-0 pointer-events-none overflow-hidden" style={{ opacity: wm.opacity }}>
-                                                <div className="w-[200%] h-[200%] -ml-[50%] -mt-[50%] flex flex-wrap transform -rotate-45 content-start items-start opacity-70">
-                                                    {Array.from({ length: 150 }).map((_, i) => (
-                                                        <div key={i} className="p-8 font-bold" style={{ color: wm.color, fontSize: wm.fontSize + 'px' }}>
-                                                            {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: wm.fontSize * 5 }} alt="" /> : wm.text}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-
-                                    return (
-                                        <div key={wm.id} style={baseStyle}>
-                                            {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: wm.fontSize * 5 }} alt="" /> : wm.text}
-                                        </div>
-                                    );
-                                })}
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative flex flex-col items-center gap-8 bg-gray-300">
+                            {/* Zoom Controls */}
+                            <div className="fixed bottom-6 right-6 z-50 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-gray-200 px-4 py-2 flex items-center gap-3">
+                                <span className="text-xs font-medium text-gray-500 w-10">{previewZoom}%</span>
+                                <input type="range" min="30" max="150" value={previewZoom} onChange={(e) => setPreviewZoom(parseInt(e.target.value))} className="w-24 accent-blue-600" />
+                                <button onClick={() => setPreviewZoom(100)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Reset</button>
                             </div>
+
+                            {renderPreviewHTML().map((pageHtml, index) => {
+                                const pageWidth = pageSize === 'A4' ? (pageConfig.orientation === 'landscape' ? '297mm' : '210mm') : pageSize === 'A5' ? '148mm' : '8.5in';
+                                const pageHeight = pageSize === 'A4' ? (pageConfig.orientation === 'landscape' ? '210mm' : '297mm') : 'min-content';
+
+                                return (
+                                    <div
+                                        key={index}
+                                        style={{
+                                            width: pageWidth,
+                                            minHeight: pageHeight,
+                                            padding: `${pageConfig.margins?.top || 1}in ${pageConfig.margins?.right || 1}in ${pageConfig.margins?.bottom || 1}in ${pageConfig.margins?.left || 1}in`,
+                                            transform: `scale(${previewZoom / 100})`,
+                                            transformOrigin: 'top center',
+                                            marginBottom: `${-100 * (1 - previewZoom / 100)}px`,
+                                            boxSizing: 'border-box'
+                                        }}
+                                        className="bg-white shadow-md border border-gray-200 custom-preview-container prose max-w-none relative overflow-hidden shrink-0 transition-transform duration-200"
+                                    >
+                                        <div dangerouslySetInnerHTML={{ __html: pageHtml }} className="relative z-10" />
+
+                                        {/* Watermarks Overlay Rendering */}
+                                        {watermarks.map(wm => {
+                                            const baseStyle: React.CSSProperties = {
+                                                position: 'absolute',
+                                                color: wm.color,
+                                                opacity: wm.opacity,
+                                                fontSize: wm.fontSize + 'px',
+                                                fontWeight: 'bold',
+                                                pointerEvents: 'none',
+                                                zIndex: wm.layer === 'foreground' ? 10 : 0,
+                                                whiteSpace: 'nowrap',
+                                            };
+
+                                            if (wm.position === 'center') {
+                                                baseStyle.top = '50%';
+                                                baseStyle.left = '50%';
+                                                baseStyle.transform = `translate(-50%, -50%) rotate(${wm.rotation ?? -45}deg)`;
+                                            } else if (wm.position === 'top-left') {
+                                                baseStyle.top = '40px';
+                                                baseStyle.left = '40px';
+                                                baseStyle.transform = `rotate(${wm.rotation ?? 0}deg)`;
+                                            } else if (wm.position === 'bottom-right') {
+                                                baseStyle.bottom = '40px';
+                                                baseStyle.right = '40px';
+                                                baseStyle.transform = `rotate(${wm.rotation ?? 0}deg)`;
+                                            } else if (wm.position === 'custom') {
+                                                baseStyle.top = `${wm.customY || 50}%`;
+                                                baseStyle.left = `${wm.customX || 50}%`;
+                                                baseStyle.transform = `translate(-50%, -50%) rotate(${wm.rotation ?? 0}deg)`;
+                                            }
+
+                                            if (wm.position === 'tiled') {
+                                                return (
+                                                    <div key={wm.id} className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: wm.layer === 'foreground' ? 10 : 0, opacity: wm.opacity }}>
+                                                        <div className="w-[200%] h-[200%] -ml-[50%] -mt-[50%] flex flex-wrap transform content-start items-start opacity-70" style={{ transform: `rotate(${wm.rotation ?? -45}deg)` }}>
+                                                            {Array.from({ length: 150 }).map((_, i) => (
+                                                                <div key={i} className="p-8 font-bold" style={{ color: wm.color, fontSize: wm.fontSize + 'px' }}>
+                                                                    {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: wm.fontSize * 5 }} alt="" /> : wm.text}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div key={wm.id} style={baseStyle}>
+                                                    {wm.type === 'image' && wm.imageUrl ? <img src={wm.imageUrl} style={{ width: wm.fontSize * 5 }} alt="" /> : wm.text}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 ) : (
@@ -554,6 +897,18 @@ const TemplateBuilder: React.FC = () => {
                             <button onClick={() => editor?.chain().focus().setTextAlign('left').run()} className={`p-2 hover:bg-gray-100 rounded ${editor?.isActive({ textAlign: 'left' }) ? 'bg-gray-100 text-blue-600' : ''}`}><AlignLeft size={16} /></button>
                             <button onClick={() => editor?.chain().focus().setTextAlign('center').run()} className={`p-2 hover:bg-gray-100 rounded ${editor?.isActive({ textAlign: 'center' }) ? 'bg-gray-100 text-blue-600' : ''}`}><AlignCenter size={16} /></button>
                             <button onClick={() => editor?.chain().focus().setTextAlign('right').run()} className={`p-2 hover:bg-gray-100 rounded ${editor?.isActive({ textAlign: 'right' }) ? 'bg-gray-100 text-blue-600' : ''}`}><AlignRight size={16} /></button>
+
+                            <div className="w-px bg-gray-300 mx-1"></div>
+
+                            {/* Columns */}
+                            <div className="flex items-center group relative">
+                                <button className={`p-2 hover:bg-gray-100 rounded flex gap-1 items-center text-sm font-medium ${editor?.isActive('multiColumn') ? 'bg-gray-100 text-blue-600' : 'text-gray-600'}`}><ColumnsIcon size={16} /> Cols</button>
+                                <div className="absolute top-full left-0 mt-1 hidden group-hover:flex flex-col bg-white shadow-lg border border-gray-200 rounded p-1 z-50 min-w-24">
+                                    <button onClick={() => editor?.chain().focus().unsetColumns().run()} className="px-3 py-1.5 text-xs text-left hover:bg-gray-50 rounded">1 Column (Reset)</button>
+                                    <button onClick={() => editor?.chain().focus().setColumns(2).run()} className="px-3 py-1.5 text-xs text-left hover:bg-gray-50 rounded">2 Columns</button>
+                                    <button onClick={() => editor?.chain().focus().setColumns(3).run()} className="px-3 py-1.5 text-xs text-left hover:bg-gray-50 rounded">3 Columns</button>
+                                </div>
+                            </div>
 
                             <div className="w-px bg-gray-300 mx-1"></div>
 
@@ -591,6 +946,29 @@ const TemplateBuilder: React.FC = () => {
 
                             <div className="w-px bg-gray-300 mx-1"></div>
 
+                            {/* Image */}
+                            <label className="p-2 hover:bg-gray-100 rounded flex gap-1 items-center text-sm font-medium text-gray-600 cursor-pointer">
+                                <ImageIcon size={16} /> Image
+                                <input
+                                    type="file"
+                                    accept="image/png, image/jpeg, image/webp"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => {
+                                                editor?.chain().focus().setImage({ src: reader.result as string }).run();
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                        e.target.value = ''; // Reset input
+                                    }}
+                                />
+                            </label>
+
+                            <div className="w-px bg-gray-300 mx-1"></div>
+
                             {/* Table */}
                             <button onClick={addTable} className="p-2 hover:bg-gray-100 rounded flex gap-1 items-center text-sm font-medium text-gray-600"><PlusCircle size={16} /> Table</button>
 
@@ -611,13 +989,47 @@ const TemplateBuilder: React.FC = () => {
                                 e.preventDefault();
                                 setIsTableMenuOpen(true);
                             }
-                        }} className="w-full">
+                        }} className="w-full flex justify-center py-8 relative">
+                            {/* Editor Zoom Controls */}
+                            <div className="fixed bottom-6 right-[350px] z-[100] bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-gray-200 px-4 py-2 flex items-center gap-3">
+                                <span className="text-xs font-medium text-gray-500 w-10">{editorZoom}%</span>
+                                <input type="range" min="20" max="200" step="10" value={editorZoom} onChange={(e) => setEditorZoom(parseInt(e.target.value))} className="w-24 accent-blue-600" />
+                                <button onClick={() => setEditorZoom(100)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Reset</button>
+                            </div>
+
                             <style>{`
+                                .ProseMirror {
+                                    width: ${pageSize === 'A4' ? (pageConfig.orientation === 'landscape' ? '297mm' : '210mm') : pageSize === 'A5' ? '148mm' : '8.5in'} !important;
+                                    min-height: ${pageSize === 'A4' ? (pageConfig.orientation === 'landscape' ? '210mm' : '297mm') : '11in'} !important;
+                                    padding: ${pageConfig.margins?.top || 1}in ${pageConfig.margins?.right || 1}in ${pageConfig.margins?.bottom || 1}in ${pageConfig.margins?.left || 1}in !important;
+                                    box-sizing: border-box;
+                                    background: white;
+                                    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                                    position: relative;
+                                    z-index: 0;
+                                }
                                 .ProseMirror .selectedCell {
                                     background-color: rgba(65, 137, 230, 0.2) !important;
                                 }
+                                
+                                body.reveal-behind-images .ProseMirror::after,
+                                body.is-dragging-overlay .ProseMirror::after {
+                                    content: '';
+                                    position: absolute;
+                                    left: 0; top: 0; right: 0; bottom: 0;
+                                    background: rgba(255, 255, 255, 0.7);
+                                    z-index: 50;
+                                    pointer-events: none;
+                                }
+                                
+                                body.reveal-behind-images .is-absolute-image,
+                                body.is-dragging-overlay .dragging-active {
+                                    z-index: 60 !important;
+                                }
                             `}</style>
-                            <EditorContent editor={editor} />
+                            <div style={{ transform: `scale(${editorZoom / 100})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-out' }}>
+                                <EditorContent editor={editor} />
+                            </div>
                         </div>
 
                         {editor && (
@@ -647,6 +1059,19 @@ const TemplateBuilder: React.FC = () => {
                                             className="w-4 h-4 p-0 border-0 rounded cursor-pointer bg-transparent"
                                         />
                                     </div>
+                                </div>
+                            </BubbleMenu>
+                        )}
+                        {editor && (
+                            <BubbleMenu editor={editor} shouldShow={({ editor }: any) => editor.isActive('image') && !isTableMenuOpen}>
+                                <div className="bg-gray-800 text-white shadow-lg rounded-md border border-gray-700 p-1 flex items-center gap-1 text-xs">
+                                    <span className="px-2 font-medium text-gray-300">Wrap Text:</span>
+                                    <button onClick={() => editor.chain().focus().updateAttributes('image', { wrapType: 'inline', x: 0, y: 0 }).run()} className={`p-1 px-2 rounded transition font-medium ${editor.isActive('image', { wrapType: 'inline' }) || !editor.getAttributes('image').wrapType ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'}`}>Inline</button>
+                                    <button onClick={() => editor.chain().focus().updateAttributes('image', { wrapType: 'square-left', x: 0, y: 0 }).run()} className={`p-1 px-2 rounded transition font-medium ${editor.isActive('image', { wrapType: 'square-left' }) ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'}`}>Square Left</button>
+                                    <button onClick={() => editor.chain().focus().updateAttributes('image', { wrapType: 'square-right', x: 0, y: 0 }).run()} className={`p-1 px-2 rounded transition font-medium ${editor.isActive('image', { wrapType: 'square-right' }) ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'}`}>Square Right</button>
+                                    <button onClick={() => editor.chain().focus().updateAttributes('image', { wrapType: 'top-bottom', x: 0, y: 0 }).run()} className={`p-1 px-2 rounded transition font-medium ${editor.isActive('image', { wrapType: 'top-bottom' }) ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'}`}>Top & Bottom</button>
+                                    <button onClick={() => editor.chain().focus().updateAttributes('image', { wrapType: 'behind' }).run()} className={`p-1 px-2 rounded transition font-medium ${editor.isActive('image', { wrapType: 'behind' }) ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'}`}>Behind Text</button>
+                                    <button onClick={() => editor.chain().focus().updateAttributes('image', { wrapType: 'front' }).run()} className={`p-1 px-2 rounded transition font-medium ${editor.isActive('image', { wrapType: 'front' }) ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'}`}>In Front</button>
                                 </div>
                             </BubbleMenu>
                         )}

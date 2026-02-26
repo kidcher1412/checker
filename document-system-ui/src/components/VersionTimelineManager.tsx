@@ -190,7 +190,7 @@ const VersionTimelineManager: React.FC<VersionTimelineManagerProps> = ({ isOpen,
     const todayPct = timeToPosition(new Date().getTime(), false);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[40] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
             <div className={`bg-white rounded-xl shadow-xl w-full max-w-5xl flex flex-col overflow-hidden max-h-[90vh] ${dragging ? 'select-none pointer-events-none' : ''}`}>
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 pointer-events-auto">
                     <div className="flex items-center gap-3">

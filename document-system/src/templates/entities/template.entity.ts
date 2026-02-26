@@ -36,4 +36,7 @@ export class Template extends AbstractBaseEntity {
 
     @Column({ type: 'varchar', length: 50, default: 'tiptap' })
     builderType: string; // 'tiptap' | 'drag-drop'
+
+    @Column({ type: 'json', nullable: true })
+    pageConfig: any; // { margins: { top, bottom, left, right }, orientation: 'portrait'|'landscape', showPageNumbers: boolean, hideFirstPageNumber: boolean }
 }
